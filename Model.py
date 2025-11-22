@@ -6,7 +6,7 @@ from PIL import Image
 # -------------------------------
 # Load the trained model
 # -------------------------------
-with open("model.pkl", "rb") as file:
+with open("steel_hardness_predictor.pkl", "rb") as file:
     model = pickle.load(file)
 
 # -------------------------------
