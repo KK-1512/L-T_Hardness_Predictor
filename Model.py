@@ -10,7 +10,7 @@ from PIL import Image
 
 @st.cache_resource
 def load_model():
-    return joblib.load("steel_hardness_model.pkl")  # <-- Replace name if different
+    return joblib.load("steel_hardness_predictor.pkl")  # <-- Replace name if different
 
 model = load_model()
 
