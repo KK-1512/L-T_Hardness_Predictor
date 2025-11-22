@@ -1,100 +1,79 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
+import os
 import joblib
-from PIL import Image
+import numpy as np
+import pandas as pd
 
-# ---------------------------------------------------------
-#                LOAD MODEL
-# ---------------------------------------------------------
+class HardnessPredictor:
+    """
+    Class to load the trained model and make hardness predictions for steel
+    after heat treatment based on composition & process parameters.
+    """
 
-@st.cache_resource
-def load_model():
-    return joblib.load("steel_hardness_predictor.pkl")  # <-- Replace name if different
+    def __init__(self, model_path: str = "steel_hardness_predictor.pkl"):
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found at path: {model_path}")
+        self.model = joblib.load(model_path)
+        print(f"Model loaded from: {model_path}")
 
-model = load_model()
+        # List of expected features in the correct order
+        self.expected_features = [
+            "C_wt%", "Mn_wt%", "Si_wt%", "Cr_wt%", "Ni_wt%", "Mo_wt%",
+            "Austenitize_Temp_C", "Hold_Time_min",
+            "Quench_Medium",  # categorical
+            "Temper_Temp_C", "Temper_Time_min",
+            "Cooling_Rate_Proxy"
+        ]
 
-# ---------------------------------------------------------
-#                UI SETUP
-# ---------------------------------------------------------
+    def prepare_input(self, input_dict: dict) -> pd.DataFrame:
+        """
+        Validate and prepare a single input dict and return a pandas DataFrame
+        ready for model.predict().
+        """
+        df = pd.DataFrame([input_dict])
 
-st.set_page_config(page_title="Steel Hardness Predictor", layout="wide")
+        missing = [f for f in self.expected_features if f not in df.columns]
+        if missing:
+            raise ValueError(f"Missing features in input: {missing}")
 
-st.title("🔧 Steel Hardness Prediction Using Machine Learning")
-st.write("""
-This tool predicts the **Hardness (HRC)** of steel after heat treatment  
-based on chemical composition and processing parameters.
-""")
+        # Reorder columns
+        df = df[self.expected_features]
 
-# ---------------------------------------------------------
-#                IMAGE UPLOAD (OPTIONAL)
-# ---------------------------------------------------------
+        return df
 
-st.subheader("📷 Upload an Image (logo, diagram, specimen photo)")
+    def predict(self, input_dict: dict) -> float:
+        """
+        Given a dictionary of input features, return predicted hardness (HRC).
+        """
+        df = self.prepare_input(input_dict)
 
-uploaded_img = st.file_uploader("Upload JPG/PNG image", type=["jpg", "jpeg", "png"])
+        try:
+            pred = self.model.predict(df)[0]
+        except Exception as e:
+            raise RuntimeError(f"Prediction failed: {e}")
 
-if uploaded_img is not None:
-    img = Image.open(uploaded_img)
-    st.image(img, caption="Uploaded Image", width=300)
+        return float(pred)
 
-st.markdown("---")
+if __name__ == "__main__":
+    # Example usage
+    predictor = HardnessPredictor(model_path="steel_hardness_predictor.pkl")
 
-# ---------------------------------------------------------
-#                INPUT FORM
-# ---------------------------------------------------------
+    sample_input = {
+        "C_wt%": 0.42,
+        "Mn_wt%": 0.75,
+        "Si_wt%": 0.18,
+        "Cr_wt%": 0.50,
+        "Ni_wt%": 0.20,
+        "Mo_wt%": 0.10,
+        "Austenitize_Temp_C": 900,
+        "Hold_Time_min": 40,
+        "Quench_Medium": "Water",
+        "Temper_Temp_C": 500,
+        "Temper_Time_min": 60,
+        "Cooling_Rate_Proxy": 3
+    }
 
-st.subheader("Enter Input Parameters")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    C = st.number_input("Carbon (C %):", 0.00, 1.50, 0.45)
-    Mn = st.number_input("Manganese (Mn %):", 0.00, 2.00, 0.75)
-    Si = st.number_input("Silicon (Si %):", 0.00, 2.00, 0.25)
-
-with col2:
-    Cr = st.number_input("Chromium (Cr %):", 0.00, 3.00, 0.50)
-    Ni = st.number_input("Nickel (Ni %):", 0.00, 3.00, 0.40)
-    Mo = st.number_input("Molybdenum (Mo %):", 0.00, 1.50, 0.20)
-
-with col3:
-    austen_temp = st.number_input("Austenitizing Temperature (°C):", 700, 1200, 850)
-    hold_time = st.number_input("Hold Time (min):", 1, 300, 60)
-    quench_medium = st.selectbox("Quench Medium:", ["Water", "Oil", "Polymer"])
-
-tempering_temp = st.number_input("Tempering Temperature (°C):", 100, 700, 300)
-tempering_time = st.number_input("Tempering Time (min):", 1, 500, 120)
-
-# Composition source (for dataset consistency)
-source = st.selectbox("Data Source Category:", 
-                      ["MDPI", "Mendeley", "S45C study", "ST37 study", "Synthetic"])
-
-# ---------------------------------------------------------
-#                PREDICTION
-# ---------------------------------------------------------
-
-if st.button("Predict Hardness (HRC)"):
-    # Build dataframe to send to model
-    input_data = pd.DataFrame([{
-        "C": C,
-        "Mn": Mn,
-        "Si": Si,
-        "Cr": Cr,
-        "Ni": Ni,
-        "Mo": Mo,
-        "austenitizing_temp": austen_temp,
-        "hold_time": hold_time,
-        "quench_medium": quench_medium,
-        "tempering_temp": tempering_temp,
-        "tempering_time": tempering_time,
-        "composition_source": source
-    }])
-
-    # Predict
-    hardness_pred = model.predict(input_data)[0]
-
-    st.success(f"### 🔩 Predicted Hardness: **{hardness_pred:.2f} HRC**")
+    predicted_hardness = predictor.predict(sample_input)
+    print(f"Predicted Hardness (HRC): {predicted_hardness:.2f}")
 
 # ---------------------------------------------------------
 #                FOOTER
